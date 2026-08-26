@@ -71,8 +71,11 @@ app = FastAPI(
 # Configure CORS so React frontend can make API requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[
+        "https://ai-vision-tau.vercel.app",
+        "http://localhost:5173",
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -81,11 +84,7 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     """Welcome endpoint."""
-    return {
-        "message": "AI Vision TFLite Classifier API is running",
-        "status": "online",
-        "model": "AI_VISION.tflite",
-    }
+    return {"name": "AI_VISION API", "status": "online"}
 
 
 @app.get("/health")
@@ -97,11 +96,10 @@ def health_check():
             detail="TFLite model interpreter is not initialized.",
         )
     return {
-        "status": "healthy",
-        "model_loaded": True,
+        "status": "online",
+        "model": "AI_VISION.tflite",
         "input_shape": input_details[0]["shape"].tolist(),
-        "input_dtype": str(input_details[0]["dtype"]),
-        "output_shape": output_details[0]["shape"].tolist(),
+        "classes": CLASS_NAMES,
     }
 
 
@@ -140,6 +138,8 @@ async def predict(file: UploadFile = File(...)):
         image = Image.open(io.BytesIO(contents))
         image = image.convert("RGB")
         image = image.resize((224, 224))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

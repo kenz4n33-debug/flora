@@ -1,7 +1,27 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Activity, ArrowRight, Check, ChevronRight, FileImage, Image as ImageIcon, Menu, Moon, RefreshCw, ScanLine, Server, Sparkles, Sun, Trash2, Upload, X } from 'lucide-react';
 
-const API_BASE = ['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'http://localhost:8000' : '/api';
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8001').replace(/\/$/, '');
+const REQUEST_TIMEOUT = 30000;
+async function apiFetch(path, options = {}, timeout = REQUEST_TIMEOUT) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(`${API_BASE}${path}`, { ...options, signal: controller.signal });
+    const contentType = response.headers.get('content-type') || '';
+    const payload = contentType.includes('application/json') ? await response.json() : await response.text();
+    if (!response.ok) {
+      const message = typeof payload === 'object' ? payload.detail : payload;
+      throw new Error(message || `API request failed (${response.status}).`);
+    }
+    if (typeof payload !== 'object') throw new Error('The AI server returned an invalid response.');
+    return payload;
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('The AI server took too long to respond. Please try again.');
+    if (error instanceof TypeError) throw new Error('AI Engine Offline. The cloud API could not be reached.');
+    throw error;
+  } finally { window.clearTimeout(timer); }
+}
 const CLASSES = ['Healthy', 'Powdery', 'Rust'];
 const formatBytes = bytes => bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
 
@@ -43,9 +63,9 @@ export default function App() {
   const [theme,setTheme]=useState(()=>localStorage.getItem('ai-theme')||'dark'),[online,setOnline]=useState(false),[file,setFile]=useState(null),[preview,setPreview]=useState(null),[loading,setLoading]=useState(false),[result,setResult]=useState(null),[error,setError]=useState('');
   const [history,setHistory]=useState(()=>{try{return JSON.parse(sessionStorage.getItem('ai-history'))||[]}catch{return[]}});
   useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('ai-theme',theme)},[theme]);
-  useEffect(()=>{fetch(`${API_BASE}/health`).then(r=>{if(!r.ok)throw Error();setOnline(true)}).catch(()=>setOnline(false))},[]);
+  useEffect(()=>{apiFetch('/health',{},10000).then(data=>setOnline(data.status==='online')).catch(()=>setOnline(false))},[]);
   const chooseFile=selected=>{if(!selected)return;if(!['image/jpeg','image/png'].includes(selected.type)){setError('Please select a valid JPG, JPEG, or PNG image.');return}if(preview)URL.revokeObjectURL(preview);setFile(selected);setPreview(URL.createObjectURL(selected));setResult(null);setError('')};
   const remove=()=>{if(preview)URL.revokeObjectURL(preview);setFile(null);setPreview(null);setResult(null);setError('')};
-  const analyze=async()=>{if(!file)return;setLoading(true);setError('');setResult(null);const body=new FormData();body.append('file',file);try{const response=await fetch(`${API_BASE}/predict`,{method:'POST',body}),data=await response.json();if(!response.ok)throw Error(data.detail||'Inference failed.');setResult(data);setOnline(true);const item={id:Date.now(),name:file.name,prediction:data.prediction,confidence:data.confidence,time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})};setHistory(prev=>{const next=[item,...prev].slice(0,6);sessionStorage.setItem('ai-history',JSON.stringify(next));return next})}catch(e){setOnline(false);setError(e.message==='Failed to fetch'?'AI Engine Offline. Start the backend server and try again.':e.message)}finally{setLoading(false)}};
+  const analyze=async()=>{if(!file)return;setLoading(true);setError('');setResult(null);const body=new FormData();body.append('file',file);try{const data=await apiFetch('/predict',{method:'POST',body});setResult(data);setOnline(true);const item={id:Date.now(),name:file.name,prediction:data.prediction,confidence:data.confidence,time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})};setHistory(prev=>{const next=[item,...prev].slice(0,6);sessionStorage.setItem('ai-history',JSON.stringify(next));return next})}catch(e){setOnline(false);setError(e.message||'Image analysis failed. Please try again.')}finally{setLoading(false)}};
   return <div id="top"><Navbar theme={theme} setTheme={setTheme} online={online}/><main><Hero/><section className="workspace-section shell" id="vision"><div className="workspace-intro"><div><span>Inference workspace</span><h2>Test the model</h2></div><p>Upload a supported image and inspect the complete probability distribution from the live model.</p></div><div className="workspace-grid"><ImageUploader file={file} preview={preview} loading={loading} onFile={chooseFile} onRemove={remove} onAnalyze={analyze} error={error}/><PredictionResult result={result} loading={loading} online={online}/></div></section><ModelSections/><InferenceFlow/><StatusAndHistory online={online} history={history} clearHistory={()=>{sessionStorage.removeItem('ai-history');setHistory([])}}/></main><footer id="about"><div className="shell footer-inner"><div><a className="logo" href="#top"><span className="logo-mark"><ScanLine size={17}/></span>AI<span>VISION</span></a><p>Experimental Computer Vision Model</p></div><div className="footer-copy"><p>Built for AI experimentation and learning.</p><small>AI predictions are experimental and should not be considered a definitive diagnosis.</small></div></div></footer></div>;
 }

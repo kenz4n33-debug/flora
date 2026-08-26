@@ -11,6 +11,3 @@ venv/
 # Local tooling
 .DS_Store
 Thumbs.db
-
-# The canonical model is already stored in /models
-backend/models/
