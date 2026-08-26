@@ -29,7 +29,7 @@ function Navbar({ theme, setTheme, online }) {
   const [open, setOpen] = useState(false);
   return <nav className="nav shell">
     <a className="logo" href="#top"><span className="logo-mark"><ScanLine size={17}/></span>AI<span>VISION</span></a>
-    <div className={`nav-links ${open ? 'open' : ''}`}><a href="#overview">Overview</a><a href="#vision">Vision</a><a href="#models">Models</a><a href="#about">About</a></div>
+    <div className={`nav-links ${open ? 'open' : ''}`}><a onClick={()=>setOpen(false)} href="#overview">Overview</a><a onClick={()=>setOpen(false)} href="#vision">Vision</a><a onClick={()=>setOpen(false)} href="#models">Models</a><a onClick={()=>setOpen(false)} href="#about">About</a></div>
     <div className="nav-actions"><div className={`model-pill ${online ? 'online' : ''}`}><i/>Model {online ? 'Ready' : 'Offline'}</div>
       <button className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme">{theme === 'dark' ? <Sun size={17}/> : <Moon size={17}/>}</button>
       <button className="icon-button menu-button" onClick={() => setOpen(!open)} aria-label="Open menu"><Menu size={18}/></button></div>
