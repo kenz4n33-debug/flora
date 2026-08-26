@@ -1,124 +1,116 @@
-# AI Plant Monitoring System 🌱🤖
+# AI Vision TFLite Testing Web Application 🌱🤖
 
-Sistem monitoring kondisi tanaman berbasis **AI Vision** dan **sensor lingkungan**. Proyek ini memadukan analisis citra daun dengan data temperatur, kelembapan udara, dan kelembapan tanah agar kondisi tanaman dapat dipantau melalui backend atau dashboard IoT.
+Website pengujian untuk menguji model **AI Computer Vision TensorFlow Lite (`AI_VISION.tflite`)** secara langsung melalui inferensi *real-time* (bukan dummy/simulasi/hardcoded).
 
-## Gambaran sistem
+Website ini digunakan untuk memverifikasi konsistensi hasil prediksi model `AI_VISION.tflite` sebelum dideploy ke perangkat IoT / ESP32-CAM.
 
-Sistem dirancang dengan dua jalur analisis:
+---
 
-1. **AI Vision** — ESP32-CAM mengambil foto daun, kemudian `AI_VISION.tflite` mengklasifikasikan kondisi visualnya sebagai `Healthy`, `Powdery`, atau `Rust`.
-2. **AI Sensor Monitoring** — DHT22 dan soil moisture sensor menyediakan data lingkungan untuk dianalisis menjadi tingkat risiko `Low`, `Moderate`, atau `High`.
+## 🛠️ Tech Stack
 
-Hasil kedua jalur diteruskan ke backend/dashboard. Knowledge base kemudian dapat menyediakan informasi gejala, pencegahan, dan rekomendasi penanganan.
+### Frontend
+- **React** (v18)
+- **Vite**
+- **JavaScript**
+- **Modern & Responsive Vanilla CSS** (AI + Smart Agriculture dark theme, glassmorphism, glow indicators, progress bars)
+- **Lucide React** (Modern Icons)
 
-> **Status model:** `models/AI_VISION.tflite` sudah tersedia. Model sensor `modelsensorminotoring.tflite` ditampilkan pada rancangan arsitektur, tetapi belum terdapat di repository ini.
+### Backend
+- **Python** (3.12+)
+- **FastAPI**
+- **Uvicorn**
+- **TensorFlow Lite / LiteRT Interpreter** (`ai-edge-litert`)
+- **Pillow** (Image Processing)
+- **NumPy**
 
-## Diagram arsitektur dan alur kerja
+---
 
-![Diagram arsitektur AI Plant Monitoring System](docs/images/system-architecture-flow.png)
-
-Alur utamanya adalah:
-
-```text
-ESP32-CAM → Foto daun → AI_VISION.tflite ───────────────┐
-                                                        ├→ Backend/Dashboard
-DHT22 + Soil Moisture → Model sensor → Tingkat risiko ──┘
-                                                             ↓
-                    Hasil monitoring + knowledge base + rekomendasi
-```
-
-## Model AI Vision
-
-| Item | Keterangan |
-|---|---|
-| Model deployment | `models/AI_VISION.tflite` |
-| Model Keras awal | `models/AI_VISION.keras` |
-| Sebelum external fine-tuning | `models/AI_VISION_before_external_finetune.keras` |
-| Model Keras final | `models/AI_VISION_final.keras` |
-| Kelas output | `Healthy`, `Powdery`, `Rust` |
-| Total data evaluasi | 1.035 citra |
-| Akurasi evaluasi | 83,19% |
-| Macro precision | 84,89% |
-| Macro recall | 83,19% |
-| Macro F1-score | 83,10% |
-
-Urutan label di atas mengikuti classification report yang tersedia. Saat mengimplementasikan inferensi, pastikan urutan label dan preprocessing citra sama dengan pipeline saat training.
-
-## Hasil pelatihan dan evaluasi
-
-### Akurasi training dan validation
-
-![Grafik training dan validation accuracy](docs/images/training-validation-accuracy.jpg)
-
-Akurasi meningkat secara bertahap selama 19 epoch. Pada akhir pelatihan, training accuracy berada di sekitar 82–83% dan validation accuracy sekitar 84%.
-
-### Loss training dan validation
-
-![Grafik training dan validation loss](docs/images/training-validation-loss.jpg)
-
-Training loss dan validation loss sama-sama menurun. Pola ini menunjukkan proses pembelajaran berjalan stabil pada eksperimen yang didokumentasikan.
-
-### Confusion matrix
-
-![Confusion matrix AI Vision](docs/images/confusion-matrix.jpg)
-
-| Label aktual | Healthy | Powdery | Rust |
-|---|---:|---:|---:|
-| Healthy | **302** | 39 | 4 |
-| Powdery | 19 | **319** | 7 |
-| Rust | 91 | 14 | **240** |
-
-Model paling baik mengenali kelas `Powdery`. Kesalahan terbesar terjadi pada sampel `Rust` yang diprediksi sebagai `Healthy`, sehingga kelas tersebut menjadi area utama untuk peningkatan dataset atau fine-tuning berikutnya.
-
-### Classification report
-
-![Classification report AI Vision](docs/images/classification-report.jpg)
-
-| Kelas | Precision | Recall | F1-score | Support |
-|---|---:|---:|---:|---:|
-| Healthy | 0,7330 | 0,8754 | 0,7979 | 345 |
-| Powdery | 0,8575 | 0,9246 | 0,8898 | 345 |
-| Rust | 0,9562 | 0,6957 | 0,8054 | 345 |
-
-## Struktur repository
+## 📁 Struktur Project
 
 ```text
 AI_VISION/
-├── README.md
-├── models/
-│   ├── AI_VISION.tflite
-│   ├── AI_VISION.keras
-│   ├── AI_VISION_before_external_finetune.keras
-│   └── AI_VISION_final.keras
-├── docs/
-│   └── images/
-│       ├── system-architecture-flow.png
-│       ├── training-validation-accuracy.jpg
-│       ├── training-validation-loss.jpg
-│       ├── confusion-matrix.jpg
-│       └── classification-report.jpg
-└── external_test/
+├── backend/
+│   ├── app.py                 # FastAPI backend server with TFLite model loader & /predict endpoint
+│   ├── requirements.txt       # Dependencies Python
+│   └── models/
+│       └── AI_VISION.tflite   # Model TensorFlow Lite
+├── frontend/
+│   ├── index.html             # HTML entry point
+│   ├── package.json           # Frontend dependencies & scripts
+│   ├── vite.config.js         # Vite configuration with proxy to http://localhost:8000
+│   └── src/
+│       ├── App.jsx            # Modern AI Vision Tester UI component
+│       ├── index.css          # Modern AI + Smart Agriculture styling
+│       └── main.jsx           # React mount entry point
+└── README.md                  # Dokumentasi project
 ```
 
-## Rencana integrasi IoT
+---
 
-1. ESP32-CAM mengambil citra daun dan mengirimkannya ke perangkat atau service inferensi.
-2. Citra diproses menggunakan preprocessing yang sama dengan proses training.
-3. `AI_VISION.tflite` menghasilkan probabilitas untuk tiga kelas kondisi daun.
-4. DHT22 membaca temperatur dan kelembapan udara, sedangkan soil moisture sensor membaca kelembapan tanah.
-5. Model sensor mengubah data lingkungan menjadi tingkat risiko.
-6. Backend menggabungkan prediksi visual dan sensor.
-7. Dashboard menampilkan kondisi tanaman, confidence score, data sensor, tingkat risiko, serta rekomendasi.
+## ⚙️ Model Information & Pipeline Specs
 
-## Pengembangan berikutnya
+- **Nama Model**: `AI_VISION.tflite`
+- **Input Shape**: `(1, 224, 224, 3)`
+- **Input Format**: Float32 RGB image
+- **Internal Preprocessing**: Model sudah memiliki **Rescaling layer** internal (`Rescaling(1./255)`). Preprocessing backend **TIDAK melakukan `img / 255.0`**.
+- **Urutan Kelas Output**:
+  - `0` = **Healthy**
+  - `1` = **Powdery**
+  - `2` = **Rust**
 
-- Tambahkan `modelsensorminotoring.tflite` dan dokumentasi input/output modelnya.
-- Dokumentasikan ukuran input, normalisasi citra, dan versi TensorFlow Lite yang digunakan.
-- Tambahkan file label agar pemetaan indeks output tidak ditulis langsung di aplikasi.
-- Uji model menggunakan foto dari kamera dan kondisi pencahayaan yang berbeda.
-- Tingkatkan recall kelas `Rust` dengan penambahan data dan augmentasi yang sesuai.
-- Tambahkan contoh kode inferensi serta integrasi API/dashboard.
+---
 
-## Catatan
+## 🚀 Cara Menjalankan Project
 
-Project ini dibuat sebagai media pembelajaran dan eksperimen AI untuk monitoring tanaman. Prediksi model sebaiknya digunakan sebagai alat bantu pemantauan dan tetap diverifikasi dengan observasi langsung.
+### 1. Jalankan Backend (FastAPI)
+
+Buka terminal di folder `backend`:
+
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app:app --reload
+```
+
+Backend akan berjalan di: `http://localhost:8000`
+
+Endpoints:
+- `GET /`: Health status & API info
+- `GET /health`: Model status & input/output tensor details
+- `POST /predict`: Endpoint inferensi citra daun
+
+### 2. Jalankan Frontend (React + Vite)
+
+Buka terminal baru di folder `frontend`:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend akan berjalan di: `http://localhost:5173`
+
+---
+
+## 📊 Format Output Predictions
+
+Endpoint `POST /predict` mengembalikan JSON dengan struktur:
+
+```json
+{
+  "prediction": "Rust",
+  "confidence": 92.41,
+  "probabilities": {
+    "Healthy": 3.12,
+    "Powdery": 4.47,
+    "Rust": 92.41
+  }
+}
+```
+
+---
+
+## ⚠️ Disclaimer
+
+> "AI predictions are experimental and should not be considered a definitive diagnosis of plant disease."
