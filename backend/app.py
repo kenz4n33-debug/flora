@@ -1,7 +1,7 @@
 import io
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, File, UploadFile, HTTPException, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
 from PIL import Image
@@ -57,25 +57,21 @@ async def lifespan(app: FastAPI):
         print(f"Error loading TFLite model: {e}")
         raise e
     yield
-    # Cleanup if needed
     interpreter = None
 
 
 app = FastAPI(
     title="AI Vision TFLite Plant Disease Classifier",
-    description="Backend API for testing TensorFlow Lite plant disease model inference.",
+    description="Backend API for TensorFlow Lite plant disease model inference.",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# Configure CORS so React frontend can make API requests
+# Configure CORS: allow all origins so Web Dashboard, Railway, and localhost can access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://ai-vision-tau.vercel.app",
-        "http://localhost:5173",
-    ],
-    allow_credentials=False,
+    allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -84,7 +80,7 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     """Welcome endpoint."""
-    return {"name": "AI_VISION API", "status": "online"}
+    return {"name": "AI_VISION API", "status": "online", "model": "AI_VISION.tflite"}
 
 
 @app.get("/health")
@@ -104,15 +100,13 @@ def health_check():
 
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
+async def predict(request: Request, file: UploadFile = File(None)):
     """
     Predict plant leaf condition using AI_VISION.tflite.
-    Preprocessing steps:
-    1. Read uploaded image bytes.
-    2. Convert to RGB image.
-    3. Resize to 224x224 pixels.
-    4. Convert to float32 NumPy array with shape (1, 224, 224, 3).
-    5. Note: Rescaling layer is INSIDE the model, so NO division by 255.0 is applied.
+    Supports:
+    1. Multipart file upload: `file: UploadFile`
+    2. JSON payload: `{"image": "<base64>"}` or `{"image_base64": "<base64>"}`
+    3. Raw binary image in request body (Content-Type: image/jpeg or application/octet-stream)
     """
     if interpreter is None:
         raise HTTPException(
@@ -120,26 +114,43 @@ async def predict(file: UploadFile = File(...)):
             detail="TFLite interpreter is not loaded.",
         )
 
-    # Validate file type extension/mime
-    if file.content_type and not file.content_type.startswith("image/"):
+    contents = None
+    content_type = request.headers.get("content-type", "")
+
+    # 1. Multipart file upload
+    if file is not None:
+        contents = await file.read()
+    # 2. JSON Base64 upload
+    elif "application/json" in content_type:
+        try:
+            body = await request.json()
+            raw_b64 = body.get("image") or body.get("image_base64") or body.get("data")
+            if raw_b64:
+                import base64
+                if "base64," in raw_b64:
+                    raw_b64 = raw_b64.split("base64,")[1]
+                contents = base64.b64decode(raw_b64)
+        except Exception as ex:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid JSON base64 payload: {str(ex)}",
+            )
+    # 3. Direct raw binary (e.g. sent directly from ESP32-CAM HTTPClient)
+    else:
+        body = await request.body()
+        if body and len(body) > 0:
+            contents = body
+
+    if not contents:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File provided is not a valid image. Please upload JPG, JPEG, or PNG.",
+            detail="No image data provided. Send a file, JSON with base64, or raw image bytes.",
         )
 
     try:
-        contents = await file.read()
-        if not contents:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Uploaded file is empty.",
-            )
-
         image = Image.open(io.BytesIO(contents))
         image = image.convert("RGB")
         image = image.resize((224, 224))
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -158,7 +169,7 @@ async def predict(file: UploadFile = File(...)):
         # Retrieve output probabilities
         output_data = interpreter.get_tensor(output_details[0]["index"])[0]
 
-        # Ensure probabilities (apply softmax if raw logits are returned)
+        # Ensure probabilities
         if np.all(output_data >= 0) and np.isclose(np.sum(output_data), 1.0, atol=1e-2):
             probs = output_data
         else:
@@ -176,8 +187,12 @@ async def predict(file: UploadFile = File(...)):
         confidence = round(float(probs[top_idx]) * 100, 2)
 
         return {
+            "status": "success",
             "prediction": top_prediction,
             "confidence": confidence,
+            "healthy": healthy_prob,
+            "powdery": powdery_prob,
+            "rust": rust_prob,
             "probabilities": {
                 "Healthy": healthy_prob,
                 "Powdery": powdery_prob,
