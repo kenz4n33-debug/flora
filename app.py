@@ -29,9 +29,11 @@ def get_model_path():
     """Find the location of AI_VISION.tflite file."""
     candidates = [
         os.path.join(os.path.dirname(__file__), "models", "AI_VISION.tflite"),
-        os.path.join(os.path.dirname(__file__), "..", "models", "AI_VISION.tflite"),
-        os.path.abspath("backend/models/AI_VISION.tflite"),
+        os.path.join(os.path.dirname(__file__), "AI_VISION.tflite"),
+        os.path.join(os.getcwd(), "models", "AI_VISION.tflite"),
+        os.path.join(os.getcwd(), "AI_VISION.tflite"),
         os.path.abspath("models/AI_VISION.tflite"),
+        os.path.abspath("AI_VISION.tflite"),
     ]
     for path in candidates:
         if os.path.exists(path):
@@ -61,7 +63,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AI Vision TFLite Plant Disease Classifier",
+    title="Flora AI Vision TFLite Plant Disease Classifier",
     description="Backend API for TensorFlow Lite plant disease model inference.",
     version="1.0.0",
     lifespan=lifespan,
@@ -80,7 +82,16 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     """Welcome endpoint."""
-    return {"name": "AI_VISION API", "status": "online", "model": "AI_VISION.tflite"}
+    return {
+        "name": "Flora AI_VISION API",
+        "status": "online",
+        "model": "AI_VISION.tflite",
+        "endpoints": {
+            "health": "/health",
+            "predict": "/predict (POST: multipart/form-data, json base64, or raw image bytes)",
+            "docs": "/docs",
+        },
+    }
 
 
 @app.get("/health")
@@ -205,3 +216,9 @@ async def predict(request: Request, file: UploadFile = File(None)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Inference execution failed: {str(e)}",
         )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
